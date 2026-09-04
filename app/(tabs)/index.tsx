@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import {
     FlatList,
+    Keyboard,
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
@@ -12,20 +13,29 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const STORAGE_KEY = "paycheck-history";
+const STORAGE_KEY = "paycheck_history";
+const BILL_RESERVE = 16;
+
+const SPLIT = {
+  save: 0.5,
+  groceries: 0.15,
+  clothesDecor: 0.2,
+  buffer: 0.15,
+};
 
 type HistoryEntry = {
   id: string;
   date: string;
   paycheck: number;
-  savePct: number;
-  saveAmount: number;
-  spendAmount: number;
+  billReserve: number;
+  save: number;
+  groceries: number;
+  clothesDecor: number;
+  buffer: number;
 };
 
 export default function Index() {
   const [paycheck, setPaycheck] = useState("");
-  const [savePct, setSavePct] = useState("50");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
@@ -51,23 +61,25 @@ export default function Index() {
     }
   };
 
+  const round = (n: number) => +n.toFixed(2);
+
   const calculate = () => {
+    Keyboard.dismiss();
     const amount = parseFloat(paycheck);
-    const pct = parseFloat(savePct);
 
-    if (isNaN(amount) || amount <= 0 || isNaN(pct) || pct < 0 || pct > 100)
-      return;
+    if (isNaN(amount) || amount <= 0) return;
 
-    const saveAmount = +(amount * (pct / 100)).toFixed(2);
-    const spendAmount = +(amount - saveAmount).toFixed(2);
+    const remaining = Math.max(amount - BILL_RESERVE, 0);
 
     const entry: HistoryEntry = {
       id: Date.now().toString(),
       date: new Date().toLocaleDateString(),
       paycheck: amount,
-      savePct: pct,
-      saveAmount,
-      spendAmount,
+      billReserve: round(Math.min(amount, BILL_RESERVE)),
+      save: round(remaining * SPLIT.save),
+      groceries: round(remaining * SPLIT.groceries),
+      clothesDecor: round(remaining * SPLIT.clothesDecor),
+      buffer: round(remaining * SPLIT.buffer),
     };
 
     saveHistory([entry, ...history]);
@@ -81,23 +93,15 @@ export default function Index() {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Text style={styles.title}>Paycheck Split</Text>
+        <Text style={styles.title}>Weekly Paycheck Split</Text>
 
         <Text style={styles.label}>Paycheck amount</Text>
         <TextInput
           style={styles.input}
           keyboardType="decimal-pad"
-          placeholder="e.g. 1500"
+          placeholder="e.g. 400"
           value={paycheck}
           onChangeText={setPaycheck}
-        />
-
-        <Text style={styles.label}>Save %</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="decimal-pad"
-          value={savePct}
-          onChangeText={setSavePct}
         />
 
         <TouchableOpacity style={styles.button} onPress={calculate}>
@@ -113,12 +117,16 @@ export default function Index() {
           <View style={styles.card}>
             <Text style={styles.cardDate}>{item.date}</Text>
             <Text>Paycheck: ${item.paycheck.toFixed(2)}</Text>
+            <Text style={styles.bills}>
+              {" "}
+              Bills: ${item.billReserve.toFixed(2)}
+            </Text>
             <Text style={styles.save}>
-              Save ({item.savePct}%): ${item.saveAmount.toFixed(2)}
+              Save/Invest: ${item.save.toFixed(2)}
             </Text>
-            <Text style={styles.spend}>
-              Spend: ${item.spendAmount.toFixed(2)}
-            </Text>
+            <Text>Groceries: ${item.groceries.toFixed(2)}</Text>
+            <Text>Clothes/Decor: ${item.clothesDecor.toFixed(2)}</Text>
+            <Text>Buffer: ${item.buffer.toFixed(2)}</Text>
           </View>
         )}
         ListEmptyComponent={<Text style={styles.empty}>No entries yet</Text>}
@@ -186,8 +194,9 @@ const styles = StyleSheet.create({
     color: "#888",
     marginBottom: 4,
   },
+  bills: { fontSize: 12, color: "#888", marginBottom: 4 },
   save: { color: "#2f4a4f", fontWeight: "600" },
-  spend: { color: "#a15c00", fontWeight: "600" },
+  // spend: { color: "#a15c00", fontWeight: "600" },
   empty: { color: "#999", fontStyle: "italic" },
   clear: { color: "#c0392b", textAlign: "center", marginTop: 12 },
 });
